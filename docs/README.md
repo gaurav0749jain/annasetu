@@ -8,7 +8,7 @@ A full-stack MERN application that connects food donors (households, restaurants
 
 ## 🚀 Live Demo
 
-- **Frontend:** https://annasetu.vercel.app
+- **Frontend:**   https://annasetu-xi.vercel.app/
 - **Backend API:** https://annasetu-api.onrender.com
 - **GitHub:** https://github.com/gaurav0749jain/annasetu
 
