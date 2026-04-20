@@ -1,1 +1,11 @@
 
+{
+  "name": "annasetu",
+  "version": "1.0.0",
+  "description": "AnnaSetu Food Waste Management Platform",
+  "scripts": {
+    "start": "cd server && node server.js",
+    "build": "cd client && npm install && npm run build",
+    "dev": "cd server && npm run dev"
+  }
+}
