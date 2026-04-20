@@ -1,0 +1,37 @@
+{
+  "name": "AnnaSetu — Food Waste Management",
+  "short_name": "AnnaSetu",
+  "description": "Bridge between surplus food and genuine need",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "social", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Browse Food",
+      "url": "/listings",
+      "description": "Browse available food listings"
+    },
+    {
+      "name": "Donate Food",
+      "url": "/create-listing",
+      "description": "Create a food donation"
+    },
+    {
+      "name": "Map View",
+      "url": "/map",
+      "description": "View food on map"
+    }
+  ]
+}

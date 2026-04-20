@@ -4,12 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import API from '../utils/axios';
 import Navbar from '../components/Navbar';
+import StatusTracker from '../components/StatusTracker';
 
 export default function Dashboard() {
     const { user } = useAuth();
-
     if (!user) return null;
-
     if (user.role === 'donor') return <DonorDashboard user={user} />;
     if (user.role === 'receiver') return <ReceiverDashboard user={user} />;
     if (user.role === 'volunteer') return <VolunteerDashboard user={user} />;
@@ -38,23 +37,36 @@ function DonorDashboard({ user }) {
     const [loading, setLoading] = useState(true);
     const { notifications, markNotificationsRead } = useSocket();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [listRes, pickupRes] = await Promise.all([
-                    API.get('/listings/my'),
-                    API.get('/pickups/my'),
-                ]);
-                setListings(listRes.data);
-                setPickups(pickupRes.data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
+    const fetchData = async () => {
+        try {
+            const [listRes, pickupRes] = await Promise.all([
+                API.get('/listings/my'),
+                API.get('/pickups/my'),
+            ]);
+            setListings(listRes.data);
+            setPickups(pickupRes.data);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchData(); }, []);
+
+    const handleConfirmPickup = async (pickupId) => {
+        try {
+            await API.put(`/pickups/${pickupId}/status`, { status: 'confirmed' });
+            fetchData();
+        } catch (err) { console.error(err); }
+    };
+
+    const handleRejectPickup = async (pickupId) => {
+        try {
+            await API.put(`/pickups/${pickupId}/status`, { status: 'cancelled' });
+            fetchData();
+        } catch (err) { console.error(err); }
+    };
 
     const getImpactReport = async () => {
         setReportLoading(true);
@@ -71,13 +83,12 @@ function DonorDashboard({ user }) {
     const totalMeals = listings.reduce((sum, l) => sum + (l.mealsCount || l.quantity), 0);
     const delivered = pickups.filter(p => p.status === 'delivered').length;
     const active = listings.filter(l => l.status === 'available').length;
+    const pendingConfirm = pickups.filter(p => p.status === 'claimed');
 
     return (
         <div className="min-h-screen bg-gray-50">
             <Navbar />
             <div className="max-w-6xl mx-auto px-4 py-8">
-
-                {/* Welcome */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">Welcome back, {user.name}! 👋</h1>
@@ -104,8 +115,37 @@ function DonorDashboard({ user }) {
                     ))}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Pending Confirmations Alert */}
+                {pendingConfirm.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                        <h3 className="font-semibold text-yellow-800 mb-3">
+                            ⏳ {pendingConfirm.length} claim(s) waiting for your confirmation!
+                        </h3>
+                        <div className="space-y-2">
+                            {pendingConfirm.map(pickup => (
+                                <div key={pickup._id} className="flex items-center justify-between bg-white rounded-lg p-3">
+                                    <div>
+                                        <div className="font-medium text-sm">{pickup.listing?.title || 'Food Listing'}</div>
+                                        <div className="text-xs text-gray-500">Claimed by: {pickup.receiver?.name}</div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleConfirmPickup(pickup._id)} className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700">
+                                            ✓ Confirm
+                                        </button>
+                                        <button onClick={() => handleRejectPickup(pickup._id)} className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-200">
+                                            ✕ Reject
+                                        </button>
+                                        <Link to={`/chat/${pickup._id}`} className="text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200">
+                                            💬 Chat
+                                        </Link>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* My Listings */}
                     <div className="md:col-span-2 card">
                         <div className="flex items-center justify-between mb-4">
@@ -120,18 +160,14 @@ function DonorDashboard({ user }) {
                             <div className="text-center py-8">
                                 <div className="text-4xl mb-2">🍽️</div>
                                 <p className="text-gray-500 text-sm">No listings yet</p>
-                                <Link to="/create-listing" className="btn-primary mt-3 inline-block text-sm px-6">
-                                    Create First Listing
-                                </Link>
+                                <Link to="/create-listing" className="btn-primary mt-3 inline-block text-sm px-6">Create First Listing</Link>
                             </div>
                         ) : (
                             <div className="space-y-3">
                                 {listings.slice(0, 5).map(listing => (
                                     <Link key={listing._id} to={`/listings/${listing._id}`}>
                                         <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">
-                                                🍱
-                                            </div>
+                                            <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🍱</div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="font-medium text-sm text-gray-800 truncate">{listing.title}</div>
                                                 <div className="text-xs text-gray-500">{listing.quantity} {listing.unit} · {listing.city}</div>
@@ -152,8 +188,6 @@ function DonorDashboard({ user }) {
 
                     {/* Right Column */}
                     <div className="space-y-4">
-
-                        {/* Notifications */}
                         <div className="card">
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="font-semibold text-gray-800">Notifications</h2>
@@ -173,19 +207,23 @@ function DonorDashboard({ user }) {
                             )}
                         </div>
 
-                        {/* AI Impact Report */}
                         <div className="card">
                             <h2 className="font-semibold text-gray-800 mb-2">AI Impact Report ✨</h2>
                             <p className="text-xs text-gray-500 mb-3">Get your personalized monthly impact story</p>
                             {report ? (
-                                <div className="bg-primary-50 rounded-lg p-3 text-xs text-gray-700 leading-relaxed">
-                                    {report}
-                                </div>
+                                <div className="bg-primary-50 rounded-lg p-3 text-xs text-gray-700 leading-relaxed">{report}</div>
                             ) : (
                                 <button onClick={getImpactReport} disabled={reportLoading} className="btn-primary w-full text-sm py-2">
                                     {reportLoading ? '✨ Generating...' : '✨ Generate Report'}
                                 </button>
                             )}
+                        </div>
+
+                        <div className="card bg-primary-50 border-primary-100">
+                            <div className="text-2xl mb-2">🏆</div>
+                            <h3 className="font-semibold text-gray-800 mb-1">Leaderboard</h3>
+                            <p className="text-xs text-gray-500 mb-3">See how you rank among donors</p>
+                            <Link to="/leaderboard" className="btn-primary w-full text-sm py-2 block text-center">View Leaderboard</Link>
                         </div>
                     </div>
                 </div>
@@ -204,11 +242,8 @@ function ReceiverDashboard({ user }) {
             try {
                 const res = await API.get('/pickups/my');
                 setPickups(res.data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
+            } catch (err) { console.error(err); }
+            finally { setLoading(false); }
         };
         fetchData();
     }, []);
@@ -220,7 +255,6 @@ function ReceiverDashboard({ user }) {
         <div className="min-h-screen bg-gray-50">
             <Navbar />
             <div className="max-w-6xl mx-auto px-4 py-8">
-
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">Welcome, {user.name}! 🏠</h1>
@@ -229,7 +263,6 @@ function ReceiverDashboard({ user }) {
                     <Link to="/listings" className="btn-primary w-fit">Browse Food →</Link>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-3 gap-4 mb-6">
                     {[
                         { label: 'Total Claims', value: pickups.length, icon: '📋' },
@@ -245,50 +278,42 @@ function ReceiverDashboard({ user }) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2 card">
-                        <h2 className="font-semibold text-gray-800 mb-4">My Claims & Pickups</h2>
-                        {loading ? (
-                            <div className="flex justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                            </div>
-                        ) : pickups.length === 0 ? (
-                            <div className="text-center py-8">
-                                <div className="text-4xl mb-2">🍽️</div>
-                                <p className="text-gray-500 text-sm">No claims yet</p>
-                                <Link to="/listings" className="btn-primary mt-3 inline-block text-sm px-6">Browse Food</Link>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {pickups.map(pickup => (
-                                    <div key={pickup._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                        <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🍱</div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-sm text-gray-800 truncate">
-                                                {pickup.listing?.title || 'Food Listing'}
+                    <div className="md:col-span-2 space-y-4">
+                        <div className="card">
+                            <h2 className="font-semibold text-gray-800 mb-4">My Claims & Pickups</h2>
+                            {loading ? (
+                                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>
+                            ) : pickups.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <div className="text-4xl mb-2">🍽️</div>
+                                    <p className="text-gray-500 text-sm">No claims yet</p>
+                                    <Link to="/listings" className="btn-primary mt-3 inline-block text-sm px-6">Browse Food</Link>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {pickups.map(pickup => (
+                                        <div key={pickup._id}>
+                                            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg mb-2">
+                                                <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-lg flex-shrink-0">🍱</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium text-sm text-gray-800 truncate">{pickup.listing?.title || 'Food Listing'}</div>
+                                                    <div className="text-xs text-gray-500">From: {pickup.donor?.name} · {pickup.donor?.city}</div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <span className={`text-xs px-2 py-1 rounded-full ${pickup.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                                            pickup.status === 'in-transit' ? 'bg-blue-100 text-blue-700' :
+                                                                pickup.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                                                                    'bg-gray-100 text-gray-600'
+                                                        }`}>{pickup.status}</span>
+                                                    <Link to={`/chat/${pickup._id}`} className="text-xs text-primary-600 hover:underline">💬 Chat</Link>
+                                                </div>
                                             </div>
-                                            <div className="text-xs text-gray-500">
-                                                From: {pickup.donor?.name} · {pickup.donor?.city}
-                                            </div>
+                                            <StatusTracker currentStatus={pickup.status} />
                                         </div>
-                                        <div className="flex flex-col items-end gap-1">
-                                            <span className={`text-xs px-2 py-1 rounded-full ${pickup.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                                                    pickup.status === 'in-transit' ? 'bg-blue-100 text-blue-700' :
-                                                        pickup.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
-                                                            'bg-gray-100 text-gray-600'
-                                                }`}>
-                                                {pickup.status}
-                                            </span>
-                                            <Link
-                                                to={`/chat/${pickup._id}`}
-                                                className="text-xs text-primary-600 hover:underline"
-                                            >
-                                                💬 Chat
-                                            </Link>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="space-y-4">
@@ -313,6 +338,11 @@ function ReceiverDashboard({ user }) {
                             <p className="text-xs text-gray-500 mb-3">See available food on the map</p>
                             <Link to="/map" className="btn-primary w-full text-sm py-2 block text-center">Open Map</Link>
                         </div>
+                        <div className="card">
+                            <h3 className="font-semibold text-gray-800 mb-1">🛡️ Food Safety Check</h3>
+                            <p className="text-xs text-gray-500 mb-3">Check if food is safe using AI</p>
+                            <Link to="/food-safety" className="btn-secondary w-full text-sm py-2 block text-center">Check Safety</Link>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -325,43 +355,32 @@ function VolunteerDashboard({ user }) {
     const [available, setAvailable] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [myRes, availRes] = await Promise.all([
-                    API.get('/pickups/my'),
-                    API.get('/pickups/available'),
-                ]);
-                setPickups(myRes.data);
-                setAvailable(availRes.data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
+    const fetchData = async () => {
+        try {
+            const [myRes, availRes] = await Promise.all([
+                API.get('/pickups/my'),
+                API.get('/pickups/available'),
+            ]);
+            setPickups(myRes.data);
+            setAvailable(availRes.data);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    };
+
+    useEffect(() => { fetchData(); }, []);
 
     const handleAccept = async (pickupId) => {
         try {
             await API.put(`/pickups/${pickupId}/status`, { status: 'volunteer-assigned' });
-            setAvailable(prev => prev.filter(p => p._id !== pickupId));
-            const res = await API.get('/pickups/my');
-            setPickups(res.data);
-        } catch (err) {
-            console.error(err);
-        }
+            fetchData();
+        } catch (err) { console.error(err); }
     };
 
     const handleStatusUpdate = async (pickupId, status) => {
         try {
             await API.put(`/pickups/${pickupId}/status`, { status });
-            const res = await API.get('/pickups/my');
-            setPickups(res.data);
-        } catch (err) {
-            console.error(err);
-        }
+            fetchData();
+        } catch (err) { console.error(err); }
     };
 
     const delivered = pickups.filter(p => p.status === 'delivered').length;
@@ -370,13 +389,11 @@ function VolunteerDashboard({ user }) {
         <div className="min-h-screen bg-gray-50">
             <Navbar />
             <div className="max-w-6xl mx-auto px-4 py-8">
-
                 <div className="mb-6">
                     <h1 className="text-2xl font-bold text-gray-800">Volunteer Dashboard 🚗</h1>
                     <p className="text-gray-500 text-sm">Welcome, {user.name} · {user.city}</p>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-3 gap-4 mb-6">
                     {[
                         { label: 'Available Pickups', value: available.length, icon: '📦' },
@@ -392,14 +409,10 @@ function VolunteerDashboard({ user }) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    {/* Available Pickups */}
                     <div className="card">
                         <h2 className="font-semibold text-gray-800 mb-4">Available Pickups 📦</h2>
                         {loading ? (
-                            <div className="flex justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                            </div>
+                            <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div></div>
                         ) : available.length === 0 ? (
                             <div className="text-center py-6 text-gray-400">
                                 <div className="text-3xl mb-2">📭</div>
@@ -408,20 +421,11 @@ function VolunteerDashboard({ user }) {
                         ) : (
                             <div className="space-y-3">
                                 {available.map(pickup => (
-                                    <div key={pickup._id} className="p-3 border border-gray-200 rounded-lg">
-                                        <div className="font-medium text-sm text-gray-800 mb-1">
-                                            {pickup.listing?.title || 'Food Pickup'}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mb-1">
-                                            📍 {pickup.listing?.pickupAddress || pickup.listing?.city}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mb-2">
-                                            📦 {pickup.listing?.quantity} {pickup.listing?.unit} · From: {pickup.donor?.name}
-                                        </div>
-                                        <button
-                                            onClick={() => handleAccept(pickup._id)}
-                                            className="btn-primary text-xs py-1.5 px-4"
-                                        >
+                                    <div key={pickup._id} className="p-3 border border-gray-200 rounded-lg hover:border-primary-300 transition-colors">
+                                        <div className="font-medium text-sm text-gray-800 mb-1">{pickup.listing?.title || 'Food Pickup'}</div>
+                                        <div className="text-xs text-gray-500 mb-1">📍 {pickup.listing?.pickupAddress || pickup.listing?.city}</div>
+                                        <div className="text-xs text-gray-500 mb-2">📦 {pickup.listing?.quantity} {pickup.listing?.unit} · From: {pickup.donor?.name}</div>
+                                        <button onClick={() => handleAccept(pickup._id)} className="btn-primary text-xs py-1.5 px-4">
                                             Accept Pickup →
                                         </button>
                                     </div>
@@ -430,7 +434,6 @@ function VolunteerDashboard({ user }) {
                         )}
                     </div>
 
-                    {/* My Active Deliveries */}
                     <div className="card">
                         <h2 className="font-semibold text-gray-800 mb-4">My Deliveries 🚗</h2>
                         {pickups.length === 0 ? (
@@ -439,36 +442,31 @@ function VolunteerDashboard({ user }) {
                                 <p className="text-sm">No deliveries yet. Accept a pickup!</p>
                             </div>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {pickups.map(pickup => (
-                                    <div key={pickup._id} className="p-3 bg-gray-50 rounded-lg">
-                                        <div className="font-medium text-sm text-gray-800 mb-1">
-                                            {pickup.listing?.title || 'Food Pickup'}
+                                    <div key={pickup._id}>
+                                        <div className="p-3 bg-gray-50 rounded-lg mb-2">
+                                            <div className="font-medium text-sm text-gray-800 mb-1">{pickup.listing?.title || 'Food Pickup'}</div>
+                                            <div className="text-xs text-gray-500 mb-2">
+                                                Donor: {pickup.donor?.name} · Receiver: {pickup.receiver?.name}
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {pickup.status === 'volunteer-assigned' && (
+                                                    <button onClick={() => handleStatusUpdate(pickup._id, 'in-transit')} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-md">
+                                                        🏃 Start Pickup
+                                                    </button>
+                                                )}
+                                                {pickup.status === 'in-transit' && (
+                                                    <button onClick={() => handleStatusUpdate(pickup._id, 'delivered')} className="text-xs bg-green-600 text-white px-2 py-1 rounded-md">
+                                                        ✓ Mark Delivered
+                                                    </button>
+                                                )}
+                                                <Link to={`/chat/${pickup._id}`} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-md hover:bg-gray-200">
+                                                    💬 Chat
+                                                </Link>
+                                            </div>
                                         </div>
-                                        <div className="text-xs text-gray-500 mb-2">
-                                            Donor: {pickup.donor?.name} · Receiver: {pickup.receiver?.name}
-                                        </div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className={`text-xs px-2 py-1 rounded-full ${pickup.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                                                    pickup.status === 'in-transit' ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-yellow-100 text-yellow-700'
-                                                }`}>
-                                                {pickup.status}
-                                            </span>
-                                            {pickup.status === 'volunteer-assigned' && (
-                                                <button onClick={() => handleStatusUpdate(pickup._id, 'in-transit')} className="text-xs bg-blue-600 text-white px-2 py-1 rounded-md">
-                                                    Start Pickup
-                                                </button>
-                                            )}
-                                            {pickup.status === 'in-transit' && (
-                                                <button onClick={() => handleStatusUpdate(pickup._id, 'delivered')} className="text-xs bg-green-600 text-white px-2 py-1 rounded-md">
-                                                    Mark Delivered ✓
-                                                </button>
-                                            )}
-                                            <Link to={`/chat/${pickup._id}`} className="text-xs text-primary-600 hover:underline">
-                                                💬 Chat
-                                            </Link>
-                                        </div>
+                                        <StatusTracker currentStatus={pickup.status} />
                                     </div>
                                 ))}
                             </div>

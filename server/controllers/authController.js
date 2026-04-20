@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateToken');
-const sendEmail = require('../utils/sendEmail');
+const { sendEmail } = require('../utils/sendEmail');
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 

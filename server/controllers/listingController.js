@@ -63,7 +63,10 @@ const getNearbyListings = async (req, res) => {
         pickupUntil: { $gte: new Date() },
         location: {
             $near: {
-                $geometry: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+                $geometry: {
+                    type: 'Point',
+                    coordinates: [parseFloat(longitude), parseFloat(latitude)],
+                },
                 $maxDistance: radius * 1000,
             },
         },
@@ -81,25 +84,30 @@ const getListingById = async (req, res) => {
 };
 
 const claimListing = async (req, res) => {
-    const listing = await Listing.findById(req.params.id);
-    if (!listing) return res.status(404).json({ message: 'Listing not found' });
-    if (listing.status !== 'available') {
-        return res.status(400).json({ message: 'Listing is no longer available' });
+    try {
+        const listing = await Listing.findById(req.params.id);
+        if (!listing) return res.status(404).json({ message: 'Listing not found' });
+        if (listing.status !== 'available') {
+            return res.status(400).json({ message: 'Listing is no longer available' });
+        }
+
+        listing.status = 'claimed';
+        listing.claimedBy = req.user._id;
+        await listing.save();
+
+        await Pickup.create({
+            listing: listing._id,
+            donor: listing.donor,
+            receiver: req.user._id,
+            pickupAddress: listing.pickupAddress || '',
+            deliveryAddress: req.body?.deliveryAddress || '',
+        });
+
+        res.json({ message: 'Listing claimed successfully', listing });
+    } catch (error) {
+        console.error('Claim error:', error);
+        res.status(500).json({ message: error.message || 'Failed to claim listing' });
     }
-
-    listing.status = 'claimed';
-    listing.claimedBy = req.user._id;
-    await listing.save();
-
-    await Pickup.create({
-        listing: listing._id,
-        donor: listing.donor,
-        receiver: req.user._id,
-        pickupAddress: listing.pickupAddress,
-        deliveryAddress: req.body.deliveryAddress || '',
-    });
-
-    res.json({ message: 'Listing claimed successfully', listing });
 };
 
 const getMyListings = async (req, res) => {

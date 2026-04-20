@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import ChatBot from './components/ChatBot';
 
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -13,6 +14,8 @@ import MapView from './pages/MapView';
 import Chat from './pages/Chat';
 import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
+import Leaderboard from './pages/Leaderboard';
+import FoodSafety from './pages/FoodSafety';
 import NotFound from './pages/NotFound';
 
 const ProtectedRoute = ({ children, roles }) => {
@@ -28,6 +31,8 @@ const ProtectedRoute = ({ children, roles }) => {
 };
 
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <BrowserRouter>
       <Routes>
@@ -38,6 +43,8 @@ export default function App() {
         <Route path="/listings" element={<Listings />} />
         <Route path="/listings/:id" element={<ListingDetail />} />
         <Route path="/map" element={<MapView />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/food-safety" element={<FoodSafety />} />
 
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -56,6 +63,9 @@ export default function App() {
         } />
         <Route path="*" element={<NotFound />} />
       </Routes>
+
+      {/* Floating AI Chatbot — shows on every page */}
+      <ChatBot />
     </BrowserRouter>
   );
 }
