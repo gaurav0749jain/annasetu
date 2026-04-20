@@ -5,27 +5,24 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const MODELS = [
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-flash-8b',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite-preview-06-17',
+    'gemini-2.5-flash-preview-05-20',
 ];
 
-const generateText = async (prompt, retries = 4) => {
+const generateText = async (prompt, retries = 3) => {
     for (let i = 0; i < retries; i++) {
         const modelName = MODELS[Math.min(i, MODELS.length - 1)];
         try {
             console.log(`Trying Gemini model: ${modelName}`);
             const model = genAI.getGenerativeModel({ model: modelName });
             const result = await model.generateContent(prompt);
-            console.log(`Success with model: ${modelName}`);
+            console.log(`Success with: ${modelName}`);
             return result.response.text();
         } catch (err) {
-            console.error(`Gemini ${modelName} failed:`, err.status, err.message?.substring(0, 150));
+            console.error(`${modelName} failed:`, err.status, err.message?.substring(0, 100));
             if (i < retries - 1) {
-                const waitTime = 2000;
-                console.log(`Retrying with next model in ${waitTime / 1000}s...`);
-                await sleep(waitTime);
+                await sleep(3000);
                 continue;
             }
             throw err;
@@ -33,24 +30,22 @@ const generateText = async (prompt, retries = 4) => {
     }
 };
 
-const generateFromImage = async (prompt, imageBase64, mimeType = 'image/jpeg', retries = 4) => {
+const generateFromImage = async (prompt, imageBase64, mimeType = 'image/jpeg', retries = 3) => {
     for (let i = 0; i < retries; i++) {
         const modelName = MODELS[Math.min(i, MODELS.length - 1)];
         try {
-            console.log(`Trying Gemini Vision model: ${modelName}`);
+            console.log(`Trying Gemini Vision: ${modelName}`);
             const model = genAI.getGenerativeModel({ model: modelName });
             const result = await model.generateContent([
                 prompt,
                 { inlineData: { data: imageBase64, mimeType } },
             ]);
-            console.log(`Vision success with model: ${modelName}`);
+            console.log(`Vision success with: ${modelName}`);
             return result.response.text();
         } catch (err) {
-            console.error(`Gemini Vision ${modelName} failed:`, err.status, err.message?.substring(0, 150));
+            console.error(`Vision ${modelName} failed:`, err.status, err.message?.substring(0, 100));
             if (i < retries - 1) {
-                const waitTime = 2000;
-                console.log(`Retrying Vision with next model in ${waitTime / 1000}s...`);
-                await sleep(waitTime);
+                await sleep(3000);
                 continue;
             }
             throw err;
