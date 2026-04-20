@@ -17,7 +17,8 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:3000',
-];
+    process.env.CLIENT_URL,
+].filter(Boolean);
 
 const io = new Server(server, {
     cors: {
@@ -38,9 +39,9 @@ app.use(cors({
     credentials: true,
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/listings', require('./routes/listingRoutes'));
@@ -55,19 +56,11 @@ app.get('/', (req, res) => {
     res.json({
         message: 'AnnaSetu API is running!',
         version: '1.0.0',
-        routes: [
-            '/api/auth',
-            '/api/listings',
-            '/api/pickups',
-            '/api/messages',
-            '/api/notifications',
-            '/api/admin',
-            '/api/ai',
-        ],
+        environment: process.env.NODE_ENV,
     });
 });
 
-app.use((err, req, res, nextFn) => {
+app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({ message: err.message || 'Server Error' });
 });
