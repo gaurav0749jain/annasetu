@@ -16,6 +16,7 @@ import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
 import Leaderboard from './pages/Leaderboard';
 import FoodSafety from './pages/FoodSafety';
+import QRVerify from './pages/QRVerify';
 import NotFound from './pages/NotFound';
 
 const ProtectedRoute = ({ children, roles }) => {
@@ -31,8 +32,6 @@ const ProtectedRoute = ({ children, roles }) => {
 };
 
 export default function App() {
-  const { user } = useAuth();
-
   return (
     <BrowserRouter>
       <Routes>
@@ -61,10 +60,11 @@ export default function App() {
         <Route path="/admin" element={
           <ProtectedRoute roles={['admin']}><AdminPanel /></ProtectedRoute>
         } />
+        <Route path="/qr-verify" element={
+          <ProtectedRoute roles={['volunteer', 'receiver', 'admin']}><QRVerify /></ProtectedRoute>
+        } />
         <Route path="*" element={<NotFound />} />
       </Routes>
-
-      {/* Floating AI Chatbot — shows on every page */}
       <ChatBot />
     </BrowserRouter>
   );

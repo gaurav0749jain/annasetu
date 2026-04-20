@@ -34,6 +34,17 @@ const pickupSchema = new mongoose.Schema({
     deliveryAddress: { type: String },
     notes: { type: String },
     deliveredAt: { type: Date },
+
+    // QR Code fields
+    pickupQRToken: { type: String },
+    deliveryQRToken: { type: String },
+    pickupQRScanned: { type: Boolean, default: false },
+    deliveryQRScanned: { type: Boolean, default: false },
+    pickupQRScannedAt: { type: Date },
+    deliveryQRScannedAt: { type: Date },
+    pickupQRScannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    deliveryQRScannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Pickup', pickupSchema);

@@ -1,48 +1,110 @@
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import API from '../utils/axios';
 import Navbar from '../components/Navbar';
 
+// Fix for default Leaflet icon paths
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconRetinaUrl: 'https://unpkg.com',
+    iconUrl: 'https://unpkg.com',
+    shadowUrl: 'https://unpkg.com',
 });
+
+// Custom Icons for Veg and Non-Veg
+const vegIcon = new L.Icon({
+    iconUrl: 'https://githubusercontent.com',
+    shadowUrl: 'https://unpkg.com',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+
+const nonVegIcon = new L.Icon({
+    iconUrl: 'https://githubusercontent.com',
+    shadowUrl: 'https://unpkg.com',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+
+function RecenterMap({ center }) {
+    const map = useMap();
+    useEffect(() => {
+        if (center) {
+            map.setView(center, 12);
+        }
+    }, [center, map]);
+    return null;
+}
 
 export default function MapView() {
     const [listings, setListings] = useState([]);
+    const [allListings, setAllListings] = useState([]);
     const [userLocation, setUserLocation] = useState([20.5937, 78.9629]);
+    const [locationFound, setLocationFound] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [radius, setRadius] = useState(10);
+    const [radius, setRadius] = useState(50);
 
     useEffect(() => {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (pos) => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
-                () => console.log('Location denied, using default')
+                (pos) => {
+                    setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+                    setLocationFound(true);
+                },
+                () => setLocationFound(false),
+                { timeout: 8000 }
             );
         }
     }, []);
 
     useEffect(() => {
-        const fetchNearby = async () => {
-            setLoading(true);
-            try {
-                const res = await API.get(`/listings/nearby?latitude=${userLocation[0]}&longitude=${userLocation[1]}&radius=${radius}`);
-                setListings(res.data);
-            } catch (err) {
-                const res = await API.get('/listings?limit=20');
-                setListings(res.data.listings || []);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchNearby();
+        fetchListings();
     }, [userLocation, radius]);
+
+    const fetchListings = async () => {
+        setLoading(true);
+        try {
+            const [nearbyRes, allRes] = await Promise.all([
+                API.get(`/listings/nearby?latitude=${userLocation[0]}&longitude=${userLocation[1]}&radius=${radius}`),
+                API.get('/listings?limit=50'),
+            ]);
+
+            const nearby = nearbyRes.data || [];
+            const all = allRes.data?.listings || [];
+
+            const withCoords = nearby.filter(l =>
+                l.location?.coordinates &&
+                l.location.coordinates[0] !== 0 &&
+                l.location.coordinates[1] !== 0
+            );
+
+            setListings(withCoords);
+            setAllListings(all);
+        } catch (err) {
+            console.error("Fetch error:", err);
+            try {
+                const res = await API.get('/listings?limit=50');
+                setAllListings(res.data?.listings || []);
+            } catch (e) {
+                console.error("Fallback fetch error:", e);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const timeLeft = (until) => {
+        const diff = new Date(until) - new Date();
+        if (diff < 0) return 'Expired';
+        const hours = Math.floor(diff / 3600000);
+        if (hours > 0) return `${hours}h left`;
+        return `${Math.floor(diff / 60000)}m left`;
+    };
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -51,79 +113,97 @@ export default function MapView() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">Food Map 🗺️</h1>
-                        <p className="text-gray-500 text-sm">{listings.length} listings found near you</p>
+                        <p className="text-gray-500 text-sm">
+                            {locationFound
+                                ? `📍 Showing listings within ${radius}km of you`
+                                : '📍 Location not available — showing all listings'}
+                        </p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <label className="text-sm text-gray-600">Radius:</label>
-                        <select value={radius} onChange={e => setRadius(e.target.value)} className="input-field w-28">
-                            <option value="5">5 km</option>
-                            <option value="10">10 km</option>
-                            <option value="25">25 km</option>
-                            <option value="50">50 km</option>
+                        <label className="text-sm text-gray-600 font-medium">Radius:</label>
+                        <select
+                            value={radius}
+                            onChange={e => setRadius(Number(e.target.value))}
+                            className="border border-gray-300 rounded-md p-1 w-28 text-sm outline-none"
+                        >
+                            <option value={5}>5 km</option>
+                            <option value={10}>10 km</option>
+                            <option value={25}>25 km</option>
+                            <option value={50}>50 km</option>
+                            <option value={100}>100 km</option>
                         </select>
                     </div>
                 </div>
 
-                <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm" style={{ height: '500px' }}>
+                {/* Legend */}
+                <div className="flex gap-4 mb-3 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">🟢 = Veg</span>
+                    <span className="flex items-center gap-1">🔴 = Non-veg</span>
+                </div>
+
+                {/* Map */}
+                <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm" style={{ height: '450px' }}>
                     <MapContainer center={userLocation} zoom={12} style={{ height: '100%', width: '100%' }}>
                         <TileLayer
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                            attribution='&copy; OpenStreetMap contributors'
                         />
-                        {listings.map((listing) => (
-                            listing.location?.coordinates?.[0] !== 0 && (
-                                <Marker
-                                    key={listing._id}
-                                    position={[
-                                        listing.location.coordinates[1],
-                                        listing.location.coordinates[0],
-                                    ]}
-                                >
-                                    <Popup>
-                                        <div className="min-w-[180px]">
-                                            <div className="font-semibold text-sm mb-1">{listing.title}</div>
-                                            <div className="text-xs text-gray-500 mb-1">
-                                                📦 {listing.quantity} {listing.unit} · {listing.foodType}
-                                            </div>
-                                            <div className="text-xs text-gray-500 mb-2">📍 {listing.city}</div>
+                        <RecenterMap center={userLocation} />
 
-                                            {/* FIX: Added opening <a> tag here */}
-                                            <a
-                                                href={`/listings/${listing._id}`}
-                                                className="text-xs bg-green-600 text-white px-3 py-1 rounded-md inline-block hover:bg-green-700"
-                                            >
-                                                View Details →
-                                            </a>
+                        {listings.map((listing) => (
+                            <Marker
+                                key={listing._id}
+                                position={[
+                                    listing.location.coordinates[1], // Latitude
+                                    listing.location.coordinates[0], // Longitude
+                                ]}
+                                icon={listing.foodType === 'veg' ? vegIcon : nonVegIcon}
+                            >
+                                <Popup maxWidth={220}>
+                                    <div style={{ minWidth: '180px' }}>
+                                        {listing.images?.[0] && (
+                                            <img
+                                                src={listing.images[0]}
+                                                alt={listing.title}
+                                                style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px', marginBottom: '8px' }}
+                                            />
+                                        )}
+                                        <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{listing.title}</div>
+                                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>
+                                            {listing.foodType === 'veg' ? '🟢' : '🔴'} {listing.foodType} · {listing.category}
                                         </div>
-                                    </Popup>
-                                </Marker>
-                            )
+                                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>
+                                            📦 {listing.quantity} {listing.unit}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '2px' }}>
+                                            📍 {listing.city}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#f97316', marginBottom: '8px' }}>
+                                            ⏰ {timeLeft(listing.pickupUntil)}
+                                        </div>
+
+                                        <Link
+                                            to={`/listings/${listing._id}`}
+                                            style={{
+                                                display: 'block',
+                                                background: '#16a34a',
+                                                color: 'white',
+                                                padding: '6px 12px',
+                                                borderRadius: '6px',
+                                                textDecoration: 'none',
+                                                fontSize: '12px',
+                                                textAlign: 'center',
+                                                fontWeight: 500
+                                            }}
+                                        >
+                                            View & Claim →
+                                        </Link>
+                                    </div>
+                                </Popup>
+                            </Marker>
                         ))}
                     </MapContainer>
                 </div>
-
-                {/* Listing cards below map */}
-                {listings.length > 0 && (
-                    <div className="mt-6">
-                        <h2 className="text-lg font-semibold text-gray-700 mb-3">Nearby Listings</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {listings.slice(0, 6).map(listing => (
-                                <Link key={listing._id} to={`/listings/${listing._id}`}>
-                                    <div className="card hover:shadow-md transition-shadow cursor-pointer">
-                                        <div className="font-medium text-gray-800 text-sm mb-1">{listing.title}</div>
-                                        <div className="text-xs text-gray-500">📦 {listing.quantity} {listing.unit}</div>
-                                        <div className="text-xs text-gray-500">📍 {listing.city}</div>
-                                        <div className="mt-2">
-                                            <span className={`text-xs px-2 py-0.5 rounded-full ${listing.foodType === 'veg' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                {listing.foodType}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
